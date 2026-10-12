@@ -4,6 +4,15 @@ import { supabase } from "../lib/supabase";
 import ProjectCard from "../components/ProjectCard";
 import ProjectModal from "../components/ProjectModal";
 
+const BUCKET_NAME = "freelancing-project-images";
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
 const emptyEditForm = {
   title: "",
   description: "",
@@ -24,9 +33,14 @@ function Projects() {
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
+
   const [selectedProject, setSelectedProject] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
   const [editForm, setEditForm] = useState(emptyEditForm);
+
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -55,11 +69,15 @@ function Projects() {
     fetchProjects();
   }, []);
 
+  // Open edit form
   function handleEdit(project) {
     setActionError("");
     setMessage("");
     setSelectedProject(null);
     setEditingProject(project);
+
+    setSelectedImage(null);
+    setImagePreview(project.image_url || project.image || "");
 
     setEditForm({
       title: project.title || "",
@@ -76,6 +94,7 @@ function Projects() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // Handle text fields
   function handleEditChange(event) {
     const { name, value } = event.target;
 
@@ -85,6 +104,39 @@ function Projects() {
     }));
   }
 
+  // Select and preview a new image
+  function handleImageChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setActionError("Please select a JPG, PNG, or WEBP image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setActionError("Image size must be 5 MB or less.");
+      event.target.value = "";
+      return;
+    }
+
+    setActionError("");
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  // Cancel editing
+  function handleCancelEdit() {
+    setEditingProject(null);
+    setEditForm({ ...emptyEditForm });
+    setSelectedImage(null);
+    setImagePreview("");
+    setActionError("");
+  }
+
+  // Upload selected image and update project
   async function handleUpdate(event) {
     event.preventDefault();
 
@@ -94,13 +146,19 @@ function Projects() {
     setActionError("");
     setMessage("");
 
+    let uploadedFilePath = null;
+
     try {
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.getSession();
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
       if (sessionError) throw sessionError;
 
-      if (!sessionData.session?.user) {
+      const session = sessionData.session;
+
+      if (!session?.user) {
         throw new Error(
           "Login session missing. Please sign in through Admin Login first."
         );
@@ -110,11 +168,51 @@ function Projects() {
         throw new Error("Project ID is missing.");
       }
 
+      const title = editForm.title.trim();
+
+      if (!title) {
+        throw new Error("Please enter a project title.");
+      }
+
+      let newImageUrl = editForm.image_url.trim();
+
+      // Upload only if a new image was selected.
+      // Otherwise, preserve the current image URL.
+      if (selectedImage) {
+        const safeFileName = selectedImage.name.replace(
+          /[^a-zA-Z0-9._-]/g,
+          "-"
+        );
+
+        uploadedFilePath =
+          `${session.user.id}/${Date.now()}-${safeFileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(uploadedFilePath, selectedImage, {
+            cacheControl: "3600",
+            contentType: selectedImage.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(
+            `Image upload failed: ${uploadError.message}`
+          );
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from(BUCKET_NAME)
+          .getPublicUrl(uploadedFilePath);
+
+        newImageUrl = publicUrlData.publicUrl;
+      }
+
       const updatedData = {
-        title: editForm.title.trim(),
+        title,
         description:
           editForm.description.trim() || "No description provided",
-        image_url: editForm.image_url.trim(),
+        image_url: newImageUrl,
         project_url: editForm.project_url.trim(),
         github_url: editForm.github_url.trim(),
         rating: Number(editForm.rating),
@@ -123,14 +221,12 @@ function Projects() {
         status: editForm.status,
       };
 
-      if (!updatedData.title) {
-        throw new Error("Please enter a project title.");
-      }
+      console.log("Updating project:", editingProject.id);
 
-      console.log("Updating project ID:", editingProject.id);
-
-      // .single() removed to prevent the single-object coercion error.
-      const { data: updatedRows, error: updateError } = await supabase
+      const {
+        data: updatedRows,
+        error: updateError,
+      } = await supabase
         .from("projects")
         .update(updatedData)
         .eq("id", editingProject.id)
@@ -140,7 +236,7 @@ function Projects() {
 
       if (!updatedRows || updatedRows.length === 0) {
         throw new Error(
-          "No project was updated. Check your Supabase UPDATE RLS policy and project ID."
+          "No project was updated. Check the Supabase UPDATE policy and project ID."
         );
       }
 
@@ -148,23 +244,41 @@ function Projects() {
 
       setProjects((previous) =>
         previous.map((project) =>
-          project.id === updatedProject.id ? updatedProject : project
+          project.id === updatedProject.id
+            ? updatedProject
+            : project
         )
       );
 
       setEditingProject(null);
       setEditForm({ ...emptyEditForm });
+      setSelectedImage(null);
+      setImagePreview("");
       setMessage("Project updated successfully!");
 
       console.log("Project updated successfully:", updatedProject);
     } catch (err) {
       console.error("Update project failed:", err);
+
+      // If upload succeeded but the database update failed,
+      // try to remove the newly uploaded image.
+      if (uploadedFilePath) {
+        const { error: cleanupError } = await supabase.storage
+          .from(BUCKET_NAME)
+          .remove([uploadedFilePath]);
+
+        if (cleanupError) {
+          console.error("Image cleanup failed:", cleanupError);
+        }
+      }
+
       setActionError(err.message || "Failed to update project.");
     } finally {
       setSaving(false);
     }
   }
 
+  // Delete project
   async function handleDelete(project) {
     if (deletingId) return;
 
@@ -179,8 +293,10 @@ function Projects() {
     setMessage("");
 
     try {
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.getSession();
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
       if (sessionError) throw sessionError;
 
@@ -190,7 +306,10 @@ function Projects() {
         );
       }
 
-      const { data: deletedRows, error: deleteError } = await supabase
+      const {
+        data: deletedRows,
+        error: deleteError,
+      } = await supabase
         .from("projects")
         .delete()
         .eq("id", project.id)
@@ -200,7 +319,7 @@ function Projects() {
 
       if (!deletedRows || deletedRows.length === 0) {
         throw new Error(
-          "Project was not deleted. Check your Supabase DELETE RLS policy and project ID."
+          "Project was not deleted. Check your Supabase DELETE policy and project ID."
         );
       }
 
@@ -213,12 +332,10 @@ function Projects() {
       }
 
       if (editingProject?.id === project.id) {
-        setEditingProject(null);
-        setEditForm({ ...emptyEditForm });
+        handleCancelEdit();
       }
 
       setMessage("Project deleted successfully!");
-      console.log("Project deleted:", project.id);
     } catch (err) {
       console.error("Delete project failed:", err);
       setActionError(err.message || "Failed to delete project.");
@@ -227,14 +344,15 @@ function Projects() {
     }
   }
 
+  // Search and status filtering
   const filteredProjects = projects.filter((project) => {
     const query = search.trim().toLowerCase();
 
     const matchesSearch =
       (project.title || "").toLowerCase().includes(query) ||
       (project.description || "").toLowerCase().includes(query) ||
-      (Array.isArray(project.skills) ? project.skills : []).some((skill) =>
-        String(skill).toLowerCase().includes(query)
+      (Array.isArray(project.skills) ? project.skills : []).some(
+        (skill) => String(skill).toLowerCase().includes(query)
       );
 
     const matchesStatus =
@@ -266,6 +384,7 @@ function Projects() {
         </div>
       )}
 
+      {/* Edit Project Form */}
       {editingProject && (
         <div className="dashboard-card mb-4" id="edit-project-form">
           <h2 className="h4 section-title mb-4">Edit Project</h2>
@@ -299,18 +418,47 @@ function Projects() {
               />
             </div>
 
+            {/* Image upload instead of URL */}
             <div className="mb-3">
               <label className="form-label" htmlFor="edit-image">
-                Image URL
+                Project Image
               </label>
+
+              {imagePreview && (
+                <div className="mb-3">
+                  <img
+                    src={imagePreview}
+                    alt="Project preview"
+                    style={{
+                      width: "100%",
+                      maxWidth: "320px",
+                      height: "180px",
+                      objectFit: "cover",
+                      borderRadius: "12px",
+                      display: "block",
+                    }}
+                  />
+
+                  <small className="text-secondary d-block mt-2">
+                    {selectedImage
+                      ? "New image preview"
+                      : "Current image"}
+                  </small>
+                </div>
+              )}
+
               <input
                 id="edit-image"
-                type="url"
+                type="file"
                 className="form-control"
-                name="image_url"
-                value={editForm.image_url}
-                onChange={handleEditChange}
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageChange}
               />
+
+              <small className="text-secondary d-block mt-2">
+                JPG, PNG, WEBP. Maximum 5 MB. Select a new image
+                only if you want to replace the current image.
+              </small>
             </div>
 
             <div className="mb-3">
@@ -324,6 +472,7 @@ function Projects() {
                 name="project_url"
                 value={editForm.project_url}
                 onChange={handleEditChange}
+                placeholder="https://example.com"
               />
             </div>
 
@@ -338,6 +487,7 @@ function Projects() {
                 name="github_url"
                 value={editForm.github_url}
                 onChange={handleEditChange}
+                placeholder="https://github.com/username/repo"
               />
             </div>
 
@@ -415,18 +565,14 @@ function Projects() {
                 className="btn btn-primary"
                 disabled={saving}
               >
-                {saving ? "Updating..." : "Update Project"}
+                {saving ? "Uploading & Updating..." : "Update Project"}
               </button>
 
               <button
                 type="button"
                 className="btn btn-outline-secondary"
                 disabled={saving}
-                onClick={() => {
-                  setEditingProject(null);
-                  setEditForm({ ...emptyEditForm });
-                  setActionError("");
-                }}
+                onClick={handleCancelEdit}
               >
                 Cancel
               </button>
@@ -435,6 +581,7 @@ function Projects() {
         </div>
       )}
 
+      {/* Search and filter */}
       <div className="row g-3 mb-4">
         <div className="col-12 col-md-8">
           <input
@@ -460,11 +607,13 @@ function Projects() {
         </div>
       </div>
 
+      {/* Loading and errors */}
       {loading && <p>Loading projects...</p>}
 
       {error && (
         <div className="alert alert-danger">
           Failed to load projects: {error}
+
           <button
             type="button"
             className="btn btn-sm btn-outline-danger ms-3"
@@ -481,6 +630,7 @@ function Projects() {
         </p>
       )}
 
+      {/* Project cards */}
       <div className="row g-3">
         {filteredProjects.map((project) => (
           <div className="col-12 col-md-6 col-lg-4" key={project.id}>
@@ -509,6 +659,7 @@ function Projects() {
         ))}
       </div>
 
+      {/* Project details modal */}
       {selectedProject && (
         <ProjectModal
           project={{

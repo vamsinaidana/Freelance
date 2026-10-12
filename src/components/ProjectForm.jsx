@@ -1,6 +1,11 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+
+const BUCKET_NAME = "freelancing-project-images";
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const initialFormData = {
   title: "",
@@ -16,9 +21,24 @@ const initialFormData = {
 
 function ProjectForm({ onProjectAdded }) {
   const [formData, setFormData] = useState(initialFormData);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [fileInputKey, setFileInputKey] = useState(0);
+
+  useEffect(() => {
+    if (!selectedImage) {
+      setPreviewUrl("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedImage);
+    setPreviewUrl(objectUrl);
+
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [selectedImage]);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -29,6 +49,34 @@ function ProjectForm({ onProjectAdded }) {
     }));
   }
 
+  function handleImageChange(e) {
+    const file = e.target.files?.[0];
+
+    setError("");
+    setMessage("");
+
+    if (!file) {
+      setSelectedImage(null);
+      return;
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError("Please select a JPG, PNG, or WEBP image.");
+      setSelectedImage(null);
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setError("Image size must be 5 MB or less.");
+      setSelectedImage(null);
+      e.target.value = "";
+      return;
+    }
+
+    setSelectedImage(file);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -36,34 +84,63 @@ function ProjectForm({ onProjectAdded }) {
     setMessage("");
     setError("");
 
+    let uploadedFilePath = null;
+
     try {
-      // 1. Check the current Supabase session
+      // 1. Check login session
       const {
         data: sessionData,
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        throw sessionError;
-      }
+      if (sessionError) throw sessionError;
 
       const session = sessionData.session;
 
       if (!session?.user) {
         throw new Error(
-          "Login session missing. Please open Admin Login and sign in again."
+          "Login session missing. Please sign in again."
         );
       }
 
-      console.log("Active session:", true);
-      console.log("Logged-in user ID:", session.user.id);
+      if (!formData.title.trim()) {
+        throw new Error("Please enter a project title.");
+      }
 
-      // 2. Prepare project data
+      // 2. Upload selected image to Supabase Storage
+      let imageUrl = "";
+
+      if (selectedImage) {
+        const safeFileName = selectedImage.name
+          .replace(/[^a-zA-Z0-9._-]/g, "_")
+          .slice(-100);
+
+        uploadedFilePath =
+          `${session.user.id}/${Date.now()}-${safeFileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(uploadedFilePath, selectedImage, {
+            cacheControl: "3600",
+            contentType: selectedImage.type,
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from(BUCKET_NAME)
+          .getPublicUrl(uploadedFilePath);
+
+        imageUrl = publicUrlData.publicUrl;
+      }
+
+      // 3. Prepare database data
       const projectData = {
         title: formData.title.trim(),
         description:
           formData.description.trim() || "No description provided",
-        image_url: formData.image_url.trim(),
+        image_url: imageUrl,
         project_url: formData.project_url.trim(),
         github_url: formData.github_url.trim(),
         rating: Number(formData.rating),
@@ -72,13 +149,7 @@ function ProjectForm({ onProjectAdded }) {
         status: formData.status,
       };
 
-      if (!projectData.title) {
-        throw new Error("Please enter a project title.");
-      }
-
-      console.log("Saving project:", projectData.title);
-
-      // 3. Insert into Supabase
+      // 4. Save project in Supabase database
       const {
         data: savedProject,
         error: insertError,
@@ -88,21 +159,31 @@ function ProjectForm({ onProjectAdded }) {
         .select()
         .single();
 
-      if (insertError) {
-        console.error("Supabase insert error:", insertError);
-        throw insertError;
-      }
+      if (insertError) throw insertError;
 
-      // 4. Success
-      console.log("Project saved:", savedProject);
-      setMessage("Project saved successfully!");
+      // 5. Success
+      setMessage("Project and image saved successfully!");
       setFormData({ ...initialFormData });
+      setSelectedImage(null);
+      setFileInputKey((prev) => prev + 1);
 
       if (onProjectAdded) {
         onProjectAdded(savedProject);
       }
     } catch (err) {
       console.error("Save project failed:", err);
+
+      // Remove the uploaded image if saving the project failed
+      if (uploadedFilePath) {
+        const { error: cleanupError } = await supabase.storage
+          .from(BUCKET_NAME)
+          .remove([uploadedFilePath]);
+
+        if (cleanupError) {
+          console.error("Image cleanup failed:", cleanupError);
+        }
+      }
+
       setError(err.message || "Failed to save project.");
     } finally {
       setLoading(false);
@@ -156,17 +237,52 @@ function ProjectForm({ onProjectAdded }) {
 
         <div className="mb-3">
           <label className="form-label" htmlFor="project-image">
-            Project Image URL
+            Project Image
           </label>
+
           <input
+            key={fileInputKey}
             id="project-image"
-            type="url"
+            type="file"
             className="form-control"
-            name="image_url"
-            value={formData.image_url}
-            onChange={handleChange}
-            placeholder="https://example.com/image.png"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleImageChange}
           />
+
+          <div className="form-text">
+            JPG, PNG or WEBP. Maximum file size: 5 MB.
+          </div>
+
+          {previewUrl && (
+            <div className="mt-3">
+              <img
+                src={previewUrl}
+                alt="Selected project preview"
+                style={{
+                  width: "100%",
+                  maxWidth: "320px",
+                  height: "190px",
+                  objectFit: "cover",
+                  borderRadius: "12px",
+                  border: "1px solid #dee2e6",
+                }}
+              />
+
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-danger btn-sm"
+                  onClick={() => {
+                    setSelectedImage(null);
+                    setError("");
+                  }}
+                  disabled={loading}
+                >
+                  Remove Image
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mb-3">
@@ -272,7 +388,9 @@ function ProjectForm({ onProjectAdded }) {
           className="btn btn-primary w-100"
           disabled={loading}
         >
-          {loading ? "Saving Project..." : "Save Project"}
+          {loading
+            ? "Uploading Image & Saving..."
+            : "Save Project"}
         </button>
       </form>
     </div>

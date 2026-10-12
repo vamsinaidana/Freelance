@@ -588,3 +588,112 @@ a {
   }
 }
  
+
+/* footer */
+
+/* ===== Footer ===== */
+
+/* ===== Light Footer Theme ===== */
+.site-footer {
+  position: relative;
+  margin-top: 60px;
+  padding: 32px 20px;
+  background: linear-gradient(
+    135deg,
+    #ffffff 0%,
+    #eff6ff 55%,
+    #eef2ff 100%
+  );
+  color: var(--text, #334155);
+  text-align: center;
+  overflow: hidden;
+ }
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.footer-copyright,
+.footer-credit,
+.footer-distribution {
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.footer-copyright {
+  color: #64748b;
+}
+
+/* Developer Name */
+.footer-name {
+  color: var(--primary, #2563EB);
+  font-weight: 700;
+  transition: color 0.3s ease;
+}
+
+.footer-name:hover {
+  color: var(--accent, #4F46E5);
+}
+
+/* VGWD Link */
+.footer-distribution a {
+  color: var(--accent, #4F46E5);
+  font-weight: 800;
+  text-decoration: none;
+  letter-spacing: 1px;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 3px;
+  transition: all 0.3s ease;
+}
+
+.footer-distribution a:hover {
+  color: var(--primary, #2563EB);
+  border-bottom-color: var(--primary, #2563EB);
+}
+
+/* Soft background decoration */
+.site-footer::before {
+  content: "";
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  top: -130px;
+  left: 10%;
+  background: #bfdbfe;
+  opacity: 0.4;
+  filter: blur(60px);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.site-footer::after {
+  content: "";
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  bottom: -140px;
+  right: 10%;
+  background: #c7d2fe;
+  opacity: 0.35;
+  filter: blur(60px);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Mobile Responsive */
+@media (max-width: 576px) {
+  .site-footer {
+    margin-top: 40px;
+    padding: 25px 14px;
+  }
+
+  .footer-copyright,
+  .footer-credit,
+  .footer-distribution {
+    font-size: 12px;
+  }
+}
