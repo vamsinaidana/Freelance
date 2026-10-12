@@ -126,10 +126,10 @@ function Dashboard() {
               )}
 
               <h3 className="h5 blue fw-bold">{project.title}</h3>
-              <p className="text-secondary">{project.description}</p>
+              <p className="text-gray">{project.description}</p>
 
               <div className="d-flex justify-content-between align-items-center gap-2">
-                <span style={{color:"green"}} className="badge text-bg-light border">
+                <span style={{color:"green "}} className="badge  border">
                   {project.status}
                 </span>
 
