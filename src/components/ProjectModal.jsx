@@ -91,8 +91,7 @@ function ProjectModal({ project, onClose }) {
               </div>
             </div>
 
-            <h6 className="fw-bold">Technologies</h6>
-
+ 
             <div className="d-flex flex-wrap gap-2 mb-4">
               {technologies.map((technology, index) => (
                 <span
