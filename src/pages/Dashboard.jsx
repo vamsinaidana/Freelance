@@ -129,7 +129,7 @@ function Dashboard() {
               <p className="text-secondary">{project.description}</p>
 
               <div className="d-flex justify-content-between align-items-center gap-2">
-                <span className="badge text-bg-light border">
+                <span style={{color:"green"}} className="badge text-bg-light border">
                   {project.status}
                 </span>
 
