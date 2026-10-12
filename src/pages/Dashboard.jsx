@@ -125,7 +125,7 @@ function Dashboard() {
                 />
               )}
 
-              <h3 className="h5 fw-bold">{project.title}</h3>
+              <h3 className="h5 blue fw-bold">{project.title}</h3>
               <p className="text-secondary">{project.description}</p>
 
               <div className="d-flex justify-content-between align-items-center gap-2">

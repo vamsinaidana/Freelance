@@ -697,3 +697,7 @@ a {
     font-size: 12px;
   }
 }
+
+.blue{
+   color: var(--primary, #2563EB);
+}

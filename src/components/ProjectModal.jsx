@@ -1,6 +1,20 @@
-
 function ProjectModal({ project, onClose }) {
   if (!project) return null;
+
+  const amount = Number(project.amount ?? project.price ?? 0);
+  const technologies = project.technologies || project.skills || [];
+  const rating = Math.min(5, Math.max(0, Number(project.rating) || 0));
+
+  const image =
+    project.image || project.image_url || "https://placehold.co/600x350?text=Project";
+
+  const status = project.status || "Not specified";
+  const paymentStatus =
+    project.payment_status || project.paymentStatus || "Not specified";
+
+  const duration = project.duration || "Not specified";
+  const liveUrl = project.liveUrl || project.project_url;
+  const githubUrl = project.githubUrl || project.github_url;
 
   return (
     <div
@@ -18,7 +32,10 @@ function ProjectModal({ project, onClose }) {
       >
         <div className="modal-content border-0 rounded-4 overflow-hidden">
           <div className="modal-header">
-            <h2 className="modal-title h5 fw-bold">{project.title}</h2>
+            <h2 className="modal-title h5 fw-bold">
+              {project.title}
+            </h2>
+
             <button
               type="button"
               className="btn-close"
@@ -29,75 +46,85 @@ function ProjectModal({ project, onClose }) {
 
           <div className="modal-body p-4">
             <img
-              src={project.image}
-              alt={project.title}
+              src={image}
+              alt={project.title || "Project"}
               className="project-image mb-4"
             />
 
-            <p className="text-secondary">{project.description}</p>
+            <p className="text-secondary">
+              {project.description || "No description provided"}
+            </p>
 
             <div className="row g-3 mb-4">
               <div className="col-6">
-                <div className="p-3 rounded-3 border">
+                <div className="p-3 rounded-3 border h-100">
                   <small className="text-secondary">Project Charge</small>
                   <h5 className="fw-bold mt-2 mb-0">
-                    ₹{project.price.toLocaleString("en-IN")}
+                    ₹{amount.toLocaleString("en-IN")}
                   </h5>
                 </div>
               </div>
 
               <div className="col-6">
-                <div className="p-3 rounded-3 border">
+                <div className="p-3 rounded-3 border h-100">
                   <small className="text-secondary">Duration</small>
-                  <h5 className="fw-bold mt-2 mb-0">{project.duration}</h5>
+                  <h5 className="fw-bold mt-2 mb-0">{duration}</h5>
                 </div>
               </div>
 
               <div className="col-6">
-                <div className="p-3 rounded-3 border">
+                <div className="p-3 rounded-3 border h-100">
                   <small className="text-secondary">Project Status</small>
-                  <h5 className="fw-bold mt-2 mb-0">{project.status}</h5>
+                  <h5 className="fw-bold mt-2 mb-0 text-capitalize">
+                    {status}
+                  </h5>
                 </div>
               </div>
 
               <div className="col-6">
-                <div className="p-3 rounded-3 border">
+                <div className="p-3 rounded-3 border h-100">
                   <small className="text-secondary">Payment Status</small>
-                  <h5 className="fw-bold mt-2 mb-0">
-                    {project.paymentStatus}
+                  <h5 className="fw-bold mt-2 mb-0 text-capitalize">
+                  Payment Success
                   </h5>
                 </div>
               </div>
             </div>
 
             <h6 className="fw-bold">Technologies</h6>
+
             <div className="d-flex flex-wrap gap-2 mb-4">
-              {project.technologies.map((technology) => (
-                <span className="badge text-bg-light border" key={technology}>
+              {technologies.map((technology, index) => (
+                <span
+                  className="badge text-bg-light border"
+                  key={`${technology}-${index}`}
+                >
                   {technology}
                 </span>
               ))}
             </div>
 
             <h6 className="fw-bold">Rating</h6>
+
             <p className="text-warning fs-5">
-              {"★".repeat(project.rating)}
+              {"★".repeat(rating)}
               <span className="text-secondary">
-                {"★".repeat(5 - project.rating)}
+                {"★".repeat(5 - rating)}
               </span>
             </p>
 
             {project.completionDate && (
               <p>
-                <strong>Completion Date:</strong> {project.completionDate}
+                <strong>Completion Date:</strong>{" "}
+                {project.completionDate}
               </p>
             )}
           </div>
 
           <div className="modal-footer">
-            {project.liveUrl && (
+            {liveUrl && (
               <a
-                href={project.liveUrl}
+                href={liveUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="btn btn-primary"
@@ -106,9 +133,9 @@ function ProjectModal({ project, onClose }) {
               </a>
             )}
 
-            {project.githubUrl && (
+            {githubUrl && (
               <a
-                href={project.githubUrl}
+                href={githubUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="btn btn-outline-dark"
@@ -117,7 +144,11 @@ function ProjectModal({ project, onClose }) {
               </a>
             )}
 
-            <button className="btn btn-secondary" onClick={onClose}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+            >
               Close
             </button>
           </div>
