@@ -12,7 +12,7 @@ function Profile() {
           </p>
           <p className="text-secondary mb-0">
             I build responsive, user-friendly websites and modern web
-            applications using React and JavaScript.
+            applications 
           </p>
         </div>
       </div>
