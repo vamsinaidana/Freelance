@@ -53,9 +53,8 @@ function Dashboard() {
         <div>
           <p className="text-primary fw-semibold mb-2">YOUR WORKSPACE</p>
           <h1 className="section-title">Dashboard</h1>
-          <p className="text-secondary">
-            Manage your freelance portfolio and projects.
-          </p>
+           
+           
         </div>
 
         <button
