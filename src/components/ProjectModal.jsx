@@ -81,14 +81,14 @@ function ProjectModal({ project, onClose }) {
                 </div>
               </div>
 
-              <div className="col-6">
-                <div className="p-3 rounded-3 border h-100">
-                  <small className="text-secondary">Payment Status</small>
-                  <h5 className="fw-bold mt-2 mb-0 text-capitalize">
-                  Payment Success
-                  </h5>
-                </div>
-              </div>
+           <div className="col-6">
+  <div className="p-3 rounded-3 border h-100">
+    <small className="text-secondary">Payment Status</small>
+    <h5 className="fw-bold mt-2 mb-0 text-capitalize">
+      {paymentStatus}
+    </h5>
+  </div>
+</div>
             </div>
 
  

@@ -17,6 +17,7 @@ const initialFormData = {
   duration: "",
   amount: "",
   status: "completed",
+  payment_status: "Pending",
 };
 
 function ProjectForm({ onProjectAdded }) {
@@ -107,7 +108,7 @@ function ProjectForm({ onProjectAdded }) {
         throw new Error("Please enter a project title.");
       }
 
-      // 2. Upload selected image to Supabase Storage
+      // 2. Upload selected image
       let imageUrl = "";
 
       if (selectedImage) {
@@ -135,7 +136,7 @@ function ProjectForm({ onProjectAdded }) {
         imageUrl = publicUrlData.publicUrl;
       }
 
-      // 3. Prepare database data
+      // 3. Prepare project data
       const projectData = {
         title: formData.title.trim(),
         description:
@@ -147,9 +148,10 @@ function ProjectForm({ onProjectAdded }) {
         duration: formData.duration.trim() || "Not specified",
         amount: Number(formData.amount || 0),
         status: formData.status,
+        payment_status: formData.payment_status,
       };
 
-      // 4. Save project in Supabase database
+      // 4. Save to Supabase
       const {
         data: savedProject,
         error: insertError,
@@ -162,7 +164,7 @@ function ProjectForm({ onProjectAdded }) {
       if (insertError) throw insertError;
 
       // 5. Success
-      setMessage("Project and image saved successfully!");
+      setMessage("Project saved successfully!");
       setFormData({ ...initialFormData });
       setSelectedImage(null);
       setFileInputKey((prev) => prev + 1);
@@ -173,7 +175,7 @@ function ProjectForm({ onProjectAdded }) {
     } catch (err) {
       console.error("Save project failed:", err);
 
-      // Remove the uploaded image if saving the project failed
+      // Remove uploaded image if database save fails
       if (uploadedFilePath) {
         const { error: cleanupError } = await supabase.storage
           .from(BUCKET_NAME)
@@ -192,7 +194,9 @@ function ProjectForm({ onProjectAdded }) {
 
   return (
     <div className="dashboard-card">
-      <h2 className="h4 section-title mb-4">Add New Project</h2>
+      <h2 className="h4 section-title mb-4">
+        Add New Project
+      </h2>
 
       {message && (
         <div className="alert alert-success" role="alert">
@@ -366,9 +370,27 @@ function ProjectForm({ onProjectAdded }) {
           />
         </div>
 
+        {/* Payment Status */}
+        <div className="mb-3">
+          <label className="form-label" htmlFor="payment-status">
+            Payment Status
+          </label>
+          <select
+            id="payment-status"
+            className="form-select"
+            name="payment_status"
+            value={formData.payment_status}
+            onChange={handleChange}
+          >
+            <option value="Pending">Pending</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </div>
+
+        {/* Project Status */}
         <div className="mb-4">
           <label className="form-label" htmlFor="project-status">
-            Status
+            Project Status
           </label>
           <select
             id="project-status"
@@ -388,9 +410,7 @@ function ProjectForm({ onProjectAdded }) {
           className="btn btn-primary w-100"
           disabled={loading}
         >
-          {loading
-            ? "Uploading Image & Saving..."
-            : "Save Project"}
+          {loading ? "Uploading Image & Saving..." : "Save Project"}
         </button>
       </form>
     </div>
